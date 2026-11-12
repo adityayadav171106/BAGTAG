@@ -1,0 +1,612 @@
+BAGTAG
+ESP32-WROOM BLE ITEM REMINDER AND GEOGRAPHIC GEOFENCING SYSTEM
+PROJECT CONCEPT AND DEVELOPMENT REQUIREMENTS
+
+Document ID: BAGTAG-SYS-001
+Version: 1.0
+Date: 23 October 2026
+Status: Initial concept and prototype plan
+Writing style: ASD-STE100-style controlled technical English
+Target platform: ESP32-WROOM and Android
+
+DOCUMENT NOTE
+
+This document uses short sentences, clear terms, numbered requirements, and ordered procedures. It is written in the style of ASD-STE100 Issue 9. It is not a certified ASD-STE100 compliance report. Full compliance requires a check against the official standard and its controlled dictionary.
+
+The current official issue is ASD-STE100 Issue 9, dated 15 January 2025. The official standard is available from the ASD-STE100 website.
+
+1. PURPOSE
+
+This document defines the concept, scope, system design, requirements, and development plan for BagTag.
+
+BagTag is a small item-reminder system. It uses an ESP32-WROOM board as a Bluetooth Low Energy tag. An Android phone detects the tag. The phone uses its own location data to support forgotten-item alerts and geographic geofencing.
+
+The first version uses one ESP32-WROOM board and one Android phone. The ESP32 receives power from USB. The first version does not use a cloud server or a crowdsourced tracking network.
+
+2. PROJECT SUMMARY
+
+2.1 Problem
+
+A person can leave a bag, key set, or other item behind. The person may not notice that the item is no longer nearby. A phone can also enter or leave a known place without a useful reminder.
+
+2.2 Proposed system
+
+BagTag combines two functions:
+
+A. BLE proximity monitoring.
+The phone scans for the ESP32 tag. The app records when it last detected the tag. The app uses this data to detect a possible separation event.
+
+B. Geographic geofencing.
+The app stores named geographic zones, such as Home or College. The phone checks its position against these zones. The app can notify the user when the phone enters or leaves a zone.
+
+The app can also use both functions together. For example, the app can warn the user when the phone leaves a saved zone and the tag is not nearby.
+
+2.3 Current prototype status
+
+The ESP32-WROOM prototype advertises a BLE device named BagTag-01. The user confirmed that the device appears in the nRF Connect mobile app. This confirms that the basic BLE advertisement can be detected.
+
+The Android BagTag app is not yet complete. Forgotten-item logic, geographic geofencing, persistent storage, and notifications still require implementation and testing.
+
+3. GOALS
+
+The project has these goals:
+
+G-01. Detect the BagTag BLE advertisement with an Android phone.
+G-02. Show the tag name, signal strength, and last-seen time in the app.
+G-03. Detect when the tag has not been seen for a defined time.
+G-04. Reduce false alerts caused by short BLE signal losses.
+G-05. Record the phone location when the tag is detected, subject to user permission.
+G-06. Warn the user when the phone moves away from the last-known location and the tag remains missing.
+G-07. Let the user create, edit, and delete geographic zones.
+G-08. Notify the user when the phone enters or leaves a saved zone.
+G-09. Keep the first version usable without a custom backend.
+G-10. Provide a clear path to later support for more tags and optional receiver networks.
+
+4. OUT OF SCOPE FOR VERSION 1
+
+The first version will not:
+
+- Connect to Apple's Find My network.
+- Use Samsung SmartThings Find or another private vendor tracking network.
+- Locate a tag by GPS coordinates. The ESP32 tag has no GPS receiver in this design.
+- Use other people's phones to find the tag.
+- Provide guaranteed real-time alerts in every Android power state.
+- Claim an exact distance from BLE signal strength.
+- Use a cloud account or remote tracking server.
+- Include a custom PCB or a battery-powered enclosure.
+
+These features may be studied after the local prototype works.
+
+5. TERMS AND DEFINITIONS
+
+BagTag: The complete item-reminder system.
+Tag: The ESP32-WROOM device that sends BLE advertisements.
+Phone: The user's Android phone.
+BLE: Bluetooth Low Energy. It sends short wireless advertisement packets.
+Advertisement: A BLE packet that a device sends so nearby devices can detect it.
+RSSI: Received Signal Strength Indicator. It is a measure of received radio signal strength.
+Last-seen time: The time of the most recent valid detection of the tag.
+Last-seen location: The phone location recorded near the most recent valid tag detection.
+Geofence: A circular geographic area with a defined center and radius.
+Zone: A named geofence, such as Home or College.
+Separation event: A possible event where the phone and tag are no longer near each other.
+False alert: An alert that does not match the real state of the tag or phone.
+
+6. SYSTEM CONTEXT AND ARCHITECTURE
+
+6.1 Main parts
+
+A. ESP32-WROOM tag
+- Runs firmware written in C++ with the Arduino framework.
+- Uses the NimBLE-Arduino library for BLE functions in the current prototype.
+- Advertises a device name and a tag identifier.
+- Uses USB power during development.
+- Does not need Wi-Fi for the first version.
+
+B. Android app
+- Uses Kotlin and Jetpack Compose for the user interface.
+- Uses Android BLE scanning to detect the tag.
+- Filters RSSI samples and tracks last-seen time.
+- Uses the phone's location only when the user grants the required permission.
+- Sends notifications for configured events.
+- Stores settings and event data on the phone.
+
+C. Local data store
+- Stores tag settings, zone settings, alert thresholds, and recent events.
+- Does not send data to a remote server in version 1.
+
+6.2 Data flow
+
+1. The ESP32 starts BLE advertising.
+2. The phone scans for BLE advertisements.
+3. The app finds the configured tag identifier.
+4. The app records the signal strength and detection time.
+5. The app updates the filtered proximity state.
+6. The app records a phone location when location data is available and permitted.
+7. The app checks for a possible separation event.
+8. The app checks geographic zone events.
+9. The app sends a notification when a defined alert condition is met.
+
+6.3 Operating boundary
+
+The tag must be close enough for the phone to receive its BLE advertisement. BLE range depends on the environment, antenna position, radio interference, and obstacles.
+
+The phone must have Bluetooth enabled to scan for the tag. Geographic geofencing also requires suitable phone location services and permissions.
+
+7. OPERATIONAL MODES
+
+7.1 Startup
+
+The ESP32 starts its BLE stack and begins advertising. The phone app starts a scan when the user enables tag monitoring and the required permissions are available.
+
+7.2 Tag detected
+
+The app records the current detection time. It updates the RSSI history. It marks the tag as detected.
+
+7.3 Tag missing
+
+The app starts a missing timer after the last valid detection. The app does not send an alert immediately. It first checks the timeout and the phone's movement, when location data is available.
+
+7.4 Possible forgotten item
+
+The app can show a warning when all configured conditions are true:
+- The tag has not been detected for the configured timeout.
+- The phone has moved far enough from the last-seen location, when valid location data is available.
+- The alert cooldown has ended.
+
+The initial timeout can be 45 seconds. The initial movement threshold can be 50 metres. These are test values, not proven limits. The app must allow later tuning.
+
+If location data is not available, the app can show a lower-confidence status such as Tag not detected. It must not claim that the item was left behind unless the configured rule supports that claim.
+
+7.5 Tag returns
+
+When the phone detects the tag again, the app clears the active missing state. The app records the return event. The app can send a return notification if the user enables it.
+
+7.6 Geofence event
+
+The app compares the phone location with saved zones. It sends an entry or exit notification when the location service reports a valid transition. The app must not treat this event as proof that the tag is inside the same zone.
+
+7.7 Combined zone and tag rule
+
+The user can enable a rule such as: When the phone exits the Home zone and the tag is not detected, send a forgotten-item alert. This rule is separate from the basic zone-entry and zone-exit alerts.
+
+8. FUNCTIONAL REQUIREMENTS
+
+The requirements below define the planned first version. The word SHALL marks a required system behavior.
+
+FR-001. The tag firmware SHALL advertise the device name BagTag-01 during the prototype test.
+FR-002. The tag firmware SHALL include a configured tag identifier in the advertisement data.
+FR-003. The tag SHALL start advertising after a normal power-on sequence.
+FR-004. The tag SHALL not require Wi-Fi for BLE advertisement.
+FR-005. The app SHALL allow the user to select or register a tag.
+FR-006. The app SHALL identify the configured tag by its expected advertisement data.
+FR-007. The app SHALL show the tag name and current status.
+FR-008. The app SHALL show the latest RSSI value and last-seen time.
+FR-009. The app SHALL keep a short history of RSSI readings for filtering.
+FR-010. The app SHALL use a configurable timeout to mark the tag as missing.
+FR-011. The app SHALL not send a forgotten-item alert from one missed advertisement alone.
+FR-012. The app SHALL support a configurable phone-movement threshold for a forgotten-item alert.
+FR-013. The app SHALL record the phone location near a valid tag detection when permission is available.
+FR-014. The app SHALL show a clear status when location data is missing or unavailable.
+FR-015. The app SHALL allow the user to create a named geographic zone.
+FR-016. Each zone SHALL have a center position and a radius.
+FR-017. The app SHALL allow the user to edit and delete a zone.
+FR-018. The app SHALL support zone-entry and zone-exit notifications.
+FR-019. The app SHALL allow the user to enable or disable each alert type.
+FR-020. The app SHALL store user settings locally on the phone.
+FR-021. The app SHALL recover after Bluetooth is turned off and then turned on again.
+FR-022. The app SHALL show useful guidance when a required permission is denied.
+FR-023. The app SHALL prevent repeated alerts from the same event during the configured cooldown.
+FR-024. The app SHALL provide a manual test function for notification delivery.
+FR-025. The app SHALL show the time and type of recent events.
+
+9. NON-FUNCTIONAL REQUIREMENTS
+
+NFR-001. The system SHOULD use the USB-powered ESP32 prototype for the first development stage.
+NFR-002. The app SHOULD operate without a custom cloud backend.
+NFR-003. The app SHOULD use clear names for tag states and alert states.
+NFR-004. The app SHOULD avoid frequent or repeated notifications for one event.
+NFR-005. The app SHOULD explain that RSSI does not provide an exact distance.
+NFR-006. The app SHOULD continue to handle the user interface when BLE scanning is unavailable.
+NFR-007. The app SHOULD minimize the amount of location data that it stores.
+NFR-008. The app SHOULD provide a way to clear stored event data and saved zones.
+NFR-009. The project SHOULD separate BLE, location, alert, storage, and user-interface code.
+NFR-010. The app SHOULD be tested with the screen on and off.
+
+10. USER INTERFACE CONCEPT
+
+10.1 Home screen
+
+The home screen should show:
+- Tag name.
+- Tag state: Nearby, Checking, Missing, or Not monitored.
+- Latest signal strength.
+- Last-seen time.
+- Last-seen location, if available.
+- A control to start or stop monitoring.
+- Recent alerts.
+
+10.2 Tag details screen
+
+The tag details screen should show the tag identifier, RSSI history, timeout settings, movement threshold, and alert options.
+
+10.3 Zones screen
+
+The zones screen should show saved zones. The user should be able to add a zone, set its center, set its radius, and enable entry or exit alerts.
+
+10.4 Settings screen
+
+The settings screen should show permission status, alert cooldown, data-clear options, and a short explanation of location use.
+
+11. FIRMWARE DESIGN
+
+11.1 Current configuration
+
+Board: ESP32-WROOM development board.
+Power: USB.
+Framework: Arduino.
+BLE library: NimBLE-Arduino.
+Advertised name: BagTag-01.
+Prototype tag identifier: TAG001.
+Advertising interval target: Approximately 100 to 150 milliseconds, subject to library and stack behavior.
+
+11.2 Current result
+
+The user has confirmed that BagTag-01 is visible in nRF Connect. This proves basic BLE discovery. It does not prove reliable background scanning, forgotten-item alerts, or geographic geofencing.
+
+11.3 Firmware tasks
+
+FW-001. Start Serial output at 115200 baud for development.
+FW-002. Start the BLE service or advertising stack.
+FW-003. Set the advertised name.
+FW-004. Add the tag identifier to advertisement data.
+FW-005. Start advertising.
+FW-006. Report startup status over Serial.
+FW-007. Restart advertising if a recoverable BLE error stops it.
+
+11.4 Identifier warning
+
+The fixed identifier TAG001 is suitable for a prototype. It is not a secure identity. A nearby person can copy a public identifier. The production design should use an authenticated registration process and rotating identifiers or another privacy-preserving method.
+
+12. ANDROID APP DESIGN
+
+12.1 Main software parts
+
+BleScanner.kt: Scans BLE advertisements and reports detections.
+TagDevice.kt: Holds tag ID, name, RSSI, and last-seen time.
+ProximityMonitor.kt: Filters readings and evaluates missing-tag rules.
+LocationRepository.kt: Provides phone location when permission is available.
+GeofenceManager.kt: Creates and monitors saved geographic zones.
+AlertManager.kt: Controls notification creation and cooldown.
+TagRepository.kt: Saves tag settings and event history.
+HomeScreen.kt: Shows the main tag state.
+TagDetailsScreen.kt: Shows tag information and alert settings.
+ZonesScreen.kt: Manages geographic zones.
+
+12.2 Android platform needs
+
+The app must request the Bluetooth permissions that match the Android version. It must request location permission before it uses phone location. It must request notification permission when required.
+
+The app must explain why each permission is needed. If the user denies a permission, the app must keep unrelated functions available when possible.
+
+Background BLE scanning can be limited by Android power management. The design must use an appropriate background strategy. A foreground service may be needed for sustained monitoring. The app must follow current Android rules for services and notifications.
+
+For geographic zones, use Android's geofencing service where supported. Test transition delay and background behavior on the target phone. Do not promise instant alerts.
+
+12.3 Local storage
+
+Store these fields where needed:
+- Tag ID.
+- User-defined tag name.
+- Last-seen timestamp.
+- Last-seen phone location and its accuracy, if available.
+- Recent RSSI samples or filtered RSSI value.
+- Missing timeout.
+- Movement threshold.
+- Alert cooldown.
+- Zone name, center, radius, and enabled transitions.
+- Recent alert events.
+
+Apply data-minimization rules. Do not keep detailed location history unless the user enables that feature.
+
+13. ALERT LOGIC
+
+13.1 BLE signal filtering
+
+RSSI changes as the phone moves and as the radio path changes. A single sample is not enough to estimate a stable state. The app should use a moving average or median over recent samples. The app should use different enter and exit thresholds, or a stable timer, to reduce rapid state changes.
+
+13.2 Missing state
+
+After a valid detection, the app records the current time. If no new detection arrives before the missing timeout, the app changes the state to Checking. The app then evaluates the movement rule and the cooldown.
+
+If the configured conditions are satisfied, the app sends a forgotten-item alert. If location is not available, the app can show that the tag is missing. It should not claim that the user left the item at a known location unless the data supports that result.
+
+13.3 Geofence state
+
+Each zone has a center and a radius. The app uses location services to detect entry and exit. The app should apply a suitable dwell or debounce rule when needed. GPS error can cause false boundary transitions, especially near the zone edge.
+
+13.4 Notification examples
+
+"BagTag-01 is no longer detected. Check that you have your bag."
+"You left the Home zone. BagTag-01 is not nearby."
+"BagTag-01 is nearby again."
+"You entered the College zone."
+
+The final wording should not imply certainty when the app only has an estimate.
+
+14. PRIVACY AND SECURITY
+
+14.1 Version 1
+
+The first version stores data on the phone. It does not send data to a cloud service. The app must ask for location permission before it uses phone location.
+
+14.2 Risks
+
+A static BLE identifier can be observed and copied. Location data can reveal personal habits. Background scanning can use battery power. The phone may delay scans when it is idle.
+
+14.3 Controls
+
+- Explain each permission in the app.
+- Store only the data needed for the feature.
+- Provide a command to clear local data.
+- Do not expose a detailed location history on a public screen.
+- Do not describe the prototype as a secure anti-theft device.
+- Use rotating identifiers and authenticated ownership before any public release.
+- Provide a way to stop monitoring.
+
+15. TECHNICAL LIMITS AND ASSUMPTIONS
+
+LIM-001. BLE does not provide geographic coordinates by itself.
+LIM-002. The tag has no GPS receiver in version 1.
+LIM-003. The phone provides the location used by the geofence.
+LIM-004. RSSI does not give a reliable exact distance in all environments.
+LIM-005. Walls, bags, pockets, people, and interference can change RSSI.
+LIM-006. Android can delay or stop background work under some conditions.
+LIM-007. Geofence alerts may be delayed by the phone or location service.
+LIM-008. The first system works only when the user's phone detects the tag.
+LIM-009. The first system does not use other phones as receivers.
+LIM-010. The user must grant the needed permissions for location-based features.
+
+16. DEVELOPMENT PLAN
+
+PHASE 1: BLE TAG PROOF OF CONCEPT
+
+Tasks:
+1. Keep the ESP32 connected to USB.
+2. Upload the existing BagTag-01 advertising sketch.
+3. Scan with nRF Connect.
+4. Confirm the device name and tag identifier.
+5. Record RSSI at several distances and positions.
+
+Deliverable: A tested ESP32 BLE beacon.
+
+Exit condition: The tag appears in nRF Connect after normal power-on. The scan shows repeat detections while the phone is in range.
+
+Status: Basic discovery is confirmed by the user.
+
+PHASE 2: ANDROID BLE SCANNER
+
+Tasks:
+1. Create an Android Studio project in Kotlin.
+2. Add BLE permissions for supported Android versions.
+3. Scan for BagTag-01 and TAG001.
+4. Show RSSI and last-seen time.
+5. Add a manual scan start and stop control.
+6. Handle Bluetooth disabled and permission denied states.
+
+Deliverable: An app that scans for the tag and shows its state.
+
+Exit condition: The app detects the tag, updates its state, and handles Bluetooth restart without a crash.
+
+PHASE 3: PROXIMITY MONITOR AND ALERTS
+
+Tasks:
+1. Add RSSI filtering.
+2. Add a missing timeout.
+3. Record the last valid detection.
+4. Add local notification support.
+5. Add location capture with permission.
+6. Add the phone-movement threshold.
+7. Add cooldown and alert reset logic.
+8. Test false signal loss while the user remains near the tag.
+
+Deliverable: A local forgotten-item reminder.
+
+Exit condition: A warning occurs after a confirmed separation scenario. Short signal losses do not create repeated warnings.
+
+PHASE 4: GEOGRAPHIC GEOFENCING
+
+Tasks:
+1. Add a zone creation screen.
+2. Store a zone center and radius.
+3. Register entry and exit transitions.
+4. Show zone state and event time.
+5. Add zone notification settings.
+6. Test with the screen on and off.
+
+Deliverable: Geographic zone alerts on the Android phone.
+
+Exit condition: The app records and notifies valid entry and exit events during controlled tests.
+
+PHASE 5: COMBINED RULES AND HARDENING
+
+Tasks:
+1. Add the rule that checks the tag when the phone exits a zone.
+2. Add app recovery after Bluetooth or location service changes.
+3. Add settings and data-clear controls.
+4. Test battery impact and background behavior.
+5. Write a user guide and test report.
+
+Deliverable: A usable local prototype.
+
+Exit condition: All required test cases pass or have documented known limits.
+
+PHASE 6: OPTIONAL FUTURE WORK
+
+Possible later work:
+- Support for multiple tags.
+- A buzzer or button on the tag.
+- Battery power and deep-sleep operation.
+- A custom PCB and enclosure.
+- A self-hosted backend for user-owned receivers.
+- A privacy-preserving crowdsourced detection network.
+
+These items are not part of version 1.
+
+17. VERIFICATION AND TEST PLAN
+
+TEST-001: Power-on
+Action: Connect the ESP32 to USB.
+Expected result: The firmware starts and begins BLE advertising.
+
+TEST-002: BLE discovery
+Action: Scan with nRF Connect.
+Expected result: BagTag-01 appears in the scan results.
+Status: Basic discovery passed, as reported by the user.
+
+TEST-003: Signal update
+Action: Move the phone closer to and farther from the tag.
+Expected result: RSSI values change over time. The app does not treat each change as an exact distance.
+
+TEST-004: Missing timeout
+Action: Move out of BLE range or turn off the tag.
+Expected result: The app changes the tag state after the configured timeout.
+
+TEST-005: Temporary signal loss
+Action: Keep the phone near the tag and briefly block the signal.
+Expected result: The app does not send a false forgotten-item alert from one short loss.
+
+TEST-006: Forgotten item
+Action: Leave the tag at a fixed location and move the phone away.
+Expected result: The app sends one alert after its configured conditions are met.
+
+TEST-007: Tag return
+Action: Move the phone back within detection range.
+Expected result: The app detects the tag and clears the missing state.
+
+TEST-008: Zone entry
+Action: Move the phone into a test zone.
+Expected result: The app records an entry event and sends a notification when the location service reports the transition.
+
+TEST-009: Zone exit
+Action: Move the phone outside the test zone.
+Expected result: The app records an exit event and sends a notification when the location service reports the transition.
+
+TEST-010: Permission denied
+Action: Deny location or Bluetooth permission.
+Expected result: The app explains the problem and does not claim that the feature is active.
+
+TEST-011: Bluetooth restart
+Action: Turn Bluetooth off and on again.
+Expected result: The app recovers or gives clear instructions to restart scanning.
+
+TEST-012: Screen-off operation
+Action: Lock the phone and repeat the tag detection test.
+Expected result: Results and any delays are recorded. The app must state its background limits clearly.
+
+TEST-013: Local data clear
+Action: Clear stored data from the app settings.
+Expected result: The app deletes the selected local tag, zone, or event data.
+
+18. RISKS AND MITIGATIONS
+
+RISK-001. BLE signal changes can cause false alerts.
+Mitigation: Use filtering, a timeout, movement checks, and a cooldown.
+
+RISK-002. Background scanning can stop or slow down.
+Mitigation: Use a supported Android background strategy. Test the target phone under normal power settings.
+
+RISK-003. Phone location can be inaccurate.
+Mitigation: Check reported accuracy. Use a zone radius and transition filtering.
+
+RISK-004. A static tag ID can be copied.
+Mitigation: Keep the fixed ID for prototype testing only. Add rotating identifiers and secure registration before public release.
+
+RISK-005. The app may use too much power.
+Mitigation: Measure battery use during screen-off tests. Adjust scan strategy and alert frequency.
+
+RISK-006. Users may assume the system works like a commercial tracker network.
+Mitigation: State that version 1 only detects the tag with the user's own phone. Do not claim global tracking.
+
+19. ACCEPTANCE CRITERIA FOR VERSION 1
+
+The first version is acceptable when:
+
+AC-001. The ESP32 tag advertises after power-on.
+AC-002. The Android app detects the configured tag.
+AC-003. The app shows the tag state, RSSI, and last-seen time.
+AC-004. The app detects a missing tag after the configured timeout.
+AC-005. The app sends a forgotten-item alert only after the configured rules are met.
+AC-006. The app clears the missing state when the tag returns.
+AC-007. The user can create, edit, and delete geographic zones.
+AC-008. The app records zone entry and exit events and sends configured notifications.
+AC-009. The app handles denied permissions and disabled services with clear messages.
+AC-010. The app states its known limits and does not claim exact range or global tracking.
+
+20. PROJECT DIRECTORY SUGGESTION
+
+BagTag/
+  firmware/
+    BagTagBeacon/
+      BagTagBeacon.ino
+  android/
+    app/
+      src/main/
+        ble/
+          BleScanner.kt
+          TagDevice.kt
+        location/
+          LocationRepository.kt
+          GeofenceManager.kt
+        alerts/
+          ProximityMonitor.kt
+          AlertManager.kt
+        data/
+          TagRepository.kt
+          SavedZone.kt
+        ui/
+          HomeScreen.kt
+          TagDetailsScreen.kt
+          ZonesScreen.kt
+  docs/
+    BAGTAG-SYS-001.txt
+    test-plan.txt
+    user-guide.txt
+
+The exact Android package structure can change during development. Keep each major function separate.
+
+21. OPEN-SOURCE REFERENCES
+
+These projects are reference material. They are not confirmed components of the BagTag codebase. Review the current code, license, maintenance state, and dependencies before reuse.
+
+1. ESP32 Bluetooth Beacon
+https://github.com/Duraib04/esp32-bluetooth-beacon
+Use: Reference for ESP32 BLE advertising and phone-based discovery.
+
+2. Android Beacon Scanner
+https://github.com/SemBeacon/android-beacon-scanner
+Use: Reference for Android beacon scanning, RSSI display, and last-seen data.
+
+3. BLE Indoor Positioning using ESP32
+https://github.com/SIDDUSPACE/BLE-Indoor-Positioning-ESP32
+Use: Reference for RSSI smoothing and hysteresis. Its use of multiple ESP32 devices differs from the first BagTag design.
+
+4. TPT Bluetooth Mesh
+https://github.com/tpt-solutions/tpt-bluetooth-mesh
+Use: Study only for later crowdsourced tracking and rotating identifiers. It has backend and network features that are outside version 1.
+
+5. ASD-STE100 official website
+https://asd-ste100.org/
+Use: Official information about ASD-STE100 Issue 9 and the Simplified Technical English standard.
+
+22. FINAL SUMMARY
+
+BagTag is an ESP32-WROOM and Android project. It combines BLE item-presence monitoring with geographic geofencing.
+
+The confirmed result is basic BLE discovery. The ESP32 advertises BagTag-01, and nRF Connect can detect it.
+
+The next task is to create an Android app that scans for the tag. The app must show RSSI and last-seen time. It must then add missing-tag detection and alerts. After that, add geographic zones and combined alert rules.
+
+Version 1 uses one phone and one USB-powered tag. It does not use a backend or other people's phones. This design keeps the first development stage small and testable.
+
+END OF DOCUMENT

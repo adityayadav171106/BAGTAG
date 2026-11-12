@@ -1,0 +1,16 @@
+# Android / Gradle
+.gradle/
+**/build/
+local.properties
+.idea/
+*.iml
+
+# Generated test and coverage output
+captures/
+*.apk
+*.aab
+
+# Local development files
+.DS_Store
+Thumbs.db
+*.log
